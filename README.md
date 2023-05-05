@@ -12,7 +12,7 @@ Unlike net/rpc from Go strlib, gorilla/rpc allows usage of HTTP POST requests fo
 ### Installation ###
 Assuming you already imported gorilla/rpc, use the following command:
 
-    go get github.com/divan/gorilla-xmlrpc/xml
+    go get github.com/ganl/gorilla-xmlrpc/xml
 
 ### Examples ###
 
@@ -25,7 +25,7 @@ import (
     "log"
     "net/http"
     "github.com/gorilla/rpc"
-    "github.com/divan/gorilla-xmlrpc/xml"
+    "github.com/ganl/gorilla-xmlrpc/xml"
 )
 
 type HelloService struct{}
@@ -37,21 +37,23 @@ func (h *HelloService) Say(r *http.Request, args *struct{Who string}, reply *str
 }
 
 func main() {
-    RPC := rpc.NewServer()
-    xmlrpcCodec := xml.NewCodec()
-    RPC.RegisterCodec(xmlrpcCodec, "text/xml")
-    RPC.RegisterService(new(HelloService), "")
-    http.Handle("/RPC2", RPC)
+RPC := rpc.NewServer()
+	xmlrpcCodec := xml.NewCodec(xml.WithSnakeTrans(true)) // enable snake to camel
+	xmlrpcCodec.RegisterAlias(`node.hello`, `HelloService.Say`)
+	RPC.RegisterCodec(xmlrpcCodec, "text/xml")
+	RPC.RegisterService(new(HelloService), "")
+	RPC.RegisterService(new(HelloService), "test")
+	http.Handle("/RPC2", RPC)
 
-    log.Println("Starting XML-RPC server on localhost:1234/RPC2")
-    log.Fatal(http.ListenAndServe(":1234", nil))
+	log.Println("Starting XML-RPC server on localhost:1234/RPC2")
+	log.Fatal(http.ListenAndServe(":1234", nil))
 }
 ```
 
 It's pretty self-explanatory and can be tested with any xmlrpc client, even raw curl request:
 
 ```bash
-curl -v -X POST -H "Content-Type: text/xml" -d '<methodCall><methodName>HelloService.Say</methodName><params><param><value><string>User 1</string></value></param></params></methodCall>' http://localhost:1234/RPC2
+curl -v -X POST -H "Content-Type: text/xml" -d '<methodCall><methodName>test.say</methodName><params><param><value><string>User 1</string></value></param></params></methodCall>' http://localhost:1234/RPC2
 ```
 
 #### Client Example ####
@@ -65,7 +67,7 @@ import (
     "log"
     "bytes"
     "net/http"
-    "github.com/divan/gorilla-xmlrpc/xml"
+    "github.com/ganl/gorilla-xmlrpc/xml"
 )
 
 func XmlRpcCall(method string, args struct{Who string}) (reply struct{Message string}, err error) {
@@ -82,7 +84,7 @@ func XmlRpcCall(method string, args struct{Who string}) (reply struct{Message st
 }
 
 func main() {
-    reply, err := XmlRpcCall("HelloService.Say", struct{Who string}{"User 1"})
+    reply, err := XmlRpcCall("node.hello", struct{Who string}{"User 1"})
     if err != nil {
         log.Fatal(err)
     }

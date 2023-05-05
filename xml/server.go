@@ -9,24 +9,47 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/gorilla/rpc"
 )
+
+var snakeReg = regexp.MustCompile("(^[A-Za-z]+|_[A-Za-z])")
+
+func Snake2Camel(str string) string {
+	return snakeReg.ReplaceAllStringFunc(str, func(s string) string {
+		return strings.Title(strings.TrimLeft(s, "_"))
+	})
+}
 
 // ----------------------------------------------------------------------------
 // Codec
 // ----------------------------------------------------------------------------
 
+type Option func(*Codec)
+
+func WithSnakeTrans(snakeTrans bool) Option {
+	return func(c *Codec) {
+		c.snakeTrans = snakeTrans
+	}
+}
+
 // NewCodec returns a new XML-RPC Codec.
-func NewCodec() *Codec {
-	return &Codec{
+func NewCodec(opts ...Option) *Codec {
+	c := &Codec{
 		aliases: make(map[string]string),
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // Codec creates a CodecRequest to process each request.
 type Codec struct {
-	aliases map[string]string
+	aliases    map[string]string
+	snakeTrans bool
 }
 
 // RegisterAlias creates a method alias
@@ -49,6 +72,16 @@ func (c *Codec) NewRequest(r *http.Request) rpc.CodecRequest {
 	request.rawxml = string(rawxml)
 	if method, ok := c.aliases[request.Method]; ok {
 		request.Method = method
+	} else {
+		if c.snakeTrans {
+			rpcMethod := request.Method
+			parts := strings.Split(rpcMethod, ".")
+			if len(parts) != 2 {
+				request.Method = Snake2Camel(parts[0])
+			} else {
+				request.Method = parts[0] + "." + Snake2Camel(parts[1])
+			}
+		}
 	}
 	return &CodecRequest{request: &request}
 }
